@@ -162,13 +162,13 @@ gint dspec_move_y;
 
 static gint dspec_mousebtnrel_cb(GtkWidget *widget, GdkEventButton *event, gpointer data)
 {
-  if(event->type == GDK_BUTTON_RELEASE) {
-    if(event->button == 1) {
-      if((event->x > (WINWIDTH - TOP_BORDER)) &&
-	 (event->y < TOP_BORDER)) { //topright corner
+  if (event->type == GDK_BUTTON_RELEASE) {
+    if (event->button == 1) {
+      if ((event->x > (WINWIDTH - TOP_BORDER)) &&
+	  (event->y < TOP_BORDER)) { //topright corner
 	dspec_vp.disable_plugin(&dspec_vp);
       }
-      if(dspec_window_motion) {
+      if (dspec_window_motion) {
 	gdk_pointer_ungrab(GDK_CURRENT_TIME);
 	dspec_window_motion = FALSE;
       }
@@ -196,17 +196,17 @@ static gint dspec_mousebtn_cb(GtkWidget *widget, GdkEventButton *event, gpointer
   dspec_move_x = event->x;
   dspec_move_y = event->y;
 
-  if(event->type == GDK_BUTTON_PRESS) {
-    if((event->button == 1) &&
-       (event->x < (WINWIDTH - TOP_BORDER)) &&
-       (event->y <= TOP_BORDER)) { //topright corner
+  if (event->type == GDK_BUTTON_PRESS) {
+    if ((event->button == 1) &&
+	(event->x < (WINWIDTH - TOP_BORDER)) &&
+	(event->y <= TOP_BORDER)) { //topright corner
       gdk_window_raise(window->window);
       gdk_pointer_grab(window->window, FALSE, GDK_BUTTON_MOTION_MASK | GDK_BUTTON_RELEASE_MASK,
 		       GDK_NONE, GDK_NONE, GDK_CURRENT_TIME);
       dspec_window_motion = TRUE;
     }
     
-    if(event->button == 3) {
+    if (event->button == 3) {
       gtk_menu_popup ((GtkMenu *)data, NULL, NULL, NULL, NULL, 
                             event->button, event->time);
     }
@@ -222,10 +222,11 @@ static void dspec_set_icon (GtkWidget *win)
   Atom icon_atom;
   glong data[2];
   
-  if (!icon)
+  if (!icon) {
     icon = gdk_pixmap_create_from_xpm_d (win->window, &mask, 
 					 &win->style->bg[GTK_STATE_NORMAL], 
 					 dspectral_mini_xpm);
+  }
   data[0] = GDK_WINDOW_XWINDOW(icon);
   data[1] = GDK_WINDOW_XWINDOW(mask);
   
@@ -238,16 +239,17 @@ static void dspec_init (void) {
   GdkColor color;
   GtkWidget *menu;
 
-  if(window) return;
+  if (window) return;
   
   dspec_config_read();
 
-  fdata[0]=(gfloat *) calloc(NUM_BANDS, sizeof(gfloat));
-  fdata[1]=(gfloat *) calloc(NUM_BANDS, sizeof(gfloat));
-  hfdata[0]=(gfloat *) calloc(NUM_BANDS, sizeof(gfloat));
-  hfdata[1]=(gfloat *) calloc(NUM_BANDS, sizeof(gfloat));
-  if(!fdata[0] || !fdata[1] || !hfdata[0] || !hfdata[1])
+  fdata[0] = (gfloat *) calloc(NUM_BANDS, sizeof(gfloat));
+  fdata[1] = (gfloat *) calloc(NUM_BANDS, sizeof(gfloat));
+  hfdata[0] = (gfloat *) calloc(NUM_BANDS, sizeof(gfloat));
+  hfdata[1] = (gfloat *) calloc(NUM_BANDS, sizeof(gfloat));
+  if (!fdata[0] || !fdata[1] || !hfdata[0] || !hfdata[1]) {
     return;
+  }
   
   window = gtk_window_new(GTK_WINDOW_DIALOG);
   gtk_widget_set_app_paintable(window, TRUE);
@@ -262,8 +264,9 @@ static void dspec_init (void) {
   dspec_set_icon(window);
   gdk_window_set_decorations(window->window, 0);
 
-  if(Cfg.pos_x != -1)
+  if (Cfg.pos_x != -1) {
     gtk_widget_set_uposition (window, Cfg.pos_x, Cfg.pos_y);
+  }
 
   menu = dspec_create_menu();
 
@@ -295,6 +298,11 @@ static void dspec_init (void) {
 
   dspec_set_theme();
 
+  if (!g_list_find(dock_window_list, window)) {
+    dock_add_window(dock_window_list, window);
+    /*gtk_widget_hide(item_follow);*/
+  }
+
   gdk_window_clear(window->window);
   gtk_widget_show(window);
 }
@@ -316,7 +324,7 @@ static void dspec_config_read () {
   Cfg.skin_xpm = "";
 
   filename = g_strconcat(g_get_home_dir(), "/.xmms/config", NULL);
-  if((cfg = xmms_cfg_open_file(filename)) != NULL) {
+  if ((cfg = xmms_cfg_open_file(filename)) != NULL) {
     xmms_cfg_read_int(cfg, CONFIG_SECTION, "avg_mode", &Cfg.avg_mode);
     xmms_cfg_read_float(cfg, CONFIG_SECTION, "avg_factor", &Cfg.avg_factor);
     xmms_cfg_read_boolean(cfg, CONFIG_SECTION, "amp_db", &Cfg.amp_db);
@@ -340,11 +348,11 @@ static void dspec_config_read () {
 static void dspec_config_write () {
   ConfigFile *cfg;
   gchar *filename;
-  if(!Cfg.relmain && Cfg.pos_x != -1 && window != NULL)
+  if (!Cfg.relmain && Cfg.pos_x != -1 && window != NULL)
     gdk_window_get_position(window->window, &Cfg.pos_x, &Cfg.pos_y);
  
   filename = g_strconcat(g_get_home_dir(), "/.xmms/config", NULL);
-  if((cfg = xmms_cfg_open_file(filename)) != NULL) {
+  if ((cfg = xmms_cfg_open_file(filename)) != NULL) {
     xmms_cfg_write_int(cfg, CONFIG_SECTION, "avg_mode", Cfg.avg_mode);
     xmms_cfg_write_float(cfg, CONFIG_SECTION, "avg_factor", Cfg.avg_factor);
     xmms_cfg_write_boolean(cfg, CONFIG_SECTION, "amp_db", Cfg.amp_db);
@@ -372,19 +380,19 @@ static void dspec_cleanup(void) {
   if((node = g_list_find(dock_window_list, window))) {
     g_list_remove_link(dock_window_list, node);
   }
-  if(win_about) gtk_widget_destroy(win_about);
-  if(win_conf)  gtk_widget_destroy(win_conf);
-  if(window)    gtk_widget_destroy(window);
-  if(fsel)      gtk_widget_destroy(fsel);
-  if(gc)           { gdk_gc_unref(gc); gc = NULL; }
-  if(bg_pixmap)    { gdk_pixmap_unref(bg_pixmap); bg_pixmap = NULL; }
-  if(pixmap) { gdk_pixmap_unref(pixmap); pixmap = NULL; }
+  if (win_about) gtk_widget_destroy(win_about);
+  if (win_conf)  gtk_widget_destroy(win_conf);
+  if (window)    gtk_widget_destroy(window);
+  if (fsel)      gtk_widget_destroy(fsel);
+  if (gc)           { gdk_gc_unref(gc); gc = NULL; }
+  if (bg_pixmap)    { gdk_pixmap_unref(bg_pixmap); bg_pixmap = NULL; }
+  if (pixmap) { gdk_pixmap_unref(pixmap); pixmap = NULL; }
   //  if(pixmap_cnl_l) { gdk_pixmap_unref(pixmap_cnl_l); pixmap_cnl_l = NULL; }
-  if(fdata[0])  free(fdata[0]); 
-  if(fdata[1])  free(fdata[1]);
-  if(hfdata[0]) free(hfdata[0]);
-  if(hfdata[1]) free(hfdata[1]);
-  if(Cfg.skin_xpm) g_free(Cfg.skin_xpm);
+  if (fdata[0])  free(fdata[0]); 
+  if (fdata[1])  free(fdata[1]);
+  if (hfdata[0]) free(hfdata[0]);
+  if (hfdata[1]) free(hfdata[1]);
+  if (Cfg.skin_xpm) g_free(Cfg.skin_xpm);
 }
 
 static void dspec_playback_start(void) {
@@ -431,10 +439,10 @@ static void dspec_render_freq(gint16 data[2][256]) {
   data_l = data[0];
   data_r = data[1];
 
-  for(i = 0; i < NUM_BANDS; i++) {
+  for (i = 0; i < NUM_BANDS; i++) {
     /* convert 256point integerdata to 128point float data (range 0.0-1.0) 
        linjear or nonlinjear */
-    if(Cfg.freq_nonlinj) {
+    if (Cfg.freq_nonlinj) {
       /* nonlinjear*/
       a=xscl[i]; b=1; yr=0.0; yl=0.0;
       do {
@@ -442,8 +450,9 @@ static void dspec_render_freq(gint16 data[2][256]) {
 	yr+=(float) *(data_r+a) / 32678.0;
 	a++; b++;
       } while(a<xscl[i+1]);
-      if(b>1) { yr/=b; yl/=b; }
-    } else {
+      if (b>1) { yr/=b; yl/=b; }
+    }
+    else {
       /* linjear */
       yl=(float)( *(data_r+2*i) + *(data_r+2*i+1)) / 65536.0;
       yr=(float)( *(data_l+2*i) + *(data_l+2*i+1)) / 65536.0;
@@ -451,34 +460,34 @@ static void dspec_render_freq(gint16 data[2][256]) {
     }
     
     /* calc time avegaring for data if avegaring is on */
-    switch(Cfg.avg_mode) {
+    switch (Cfg.avg_mode) {
     case 1:
       /* step up/decay */
       *oldyr *= Cfg.avg_factor;
       *oldyl *= Cfg.avg_factor;
-      if( *oldyr > yr ) yr= *oldyr;      
-      if( *oldyl > yl ) yl= *oldyl;
+      if ( *oldyr > yr ) yr= *oldyr;      
+      if ( *oldyl > yl ) yl= *oldyl;
       *oldyl=yl-0.000125; *oldyr=yr-0.000125;
       break;
     case 2:
       /* exponential */
       yr = yr * (1-Cfg.avg_factor) + *oldyr * Cfg.avg_factor;
       yl = yl * (1-Cfg.avg_factor) + *oldyl * Cfg.avg_factor;
-      *oldyl=yl; *oldyr=yr;
+      *oldyl = yl; *oldyr = yr;
       break;
     default:
       /* no averaging */
       break;
     }
     /* calc 3dbgain for data  */
-    if(Cfg.amp_gain) {
+    if (Cfg.amp_gain) {
       /* really the right thing at all?.. looks good on screen.. but*/
       /* I'm really not sure abaut the correctness of this...*/
-      yl*=sqrt((a+1)*22.05/256); // 22.05 is samplefreq/2/1000... is not always right
-      yr*=sqrt((a+1)*22.05/256); // but.. very common
+      yl *= sqrt((a+1)*22.05/256); // 22.05 is samplefreq/2/1000... is not always right
+      yr *= sqrt((a+1)*22.05/256); // but.. very common
     }
 
-    *pl=yl;  *pr=yr;
+    *pl = yl;  *pr = yr;
     oldyl++; oldyr++;
     pl++;    pr++;
   }
@@ -502,10 +511,10 @@ static void dspec_render_freq(gint16 data[2][256]) {
 		     WINWIDTH - SIDE_BORDER - AWIDTH, TOP_BORDER,
 		     AWIDTH, AHEIGHT);
 
-  pl=fdata[0];
-  pr=fdata[1];
+  pl = fdata[0];
+  pr = fdata[1];
 	
-  for(i = 0; i < NUM_BANDS; i++) {
+  for (i = 0; i < NUM_BANDS; i++) {
     /* this ones can produce under/overflow.. but as far as I know thats no harm
         it doesn't crash at least.. */
     /* calc barheight */
@@ -593,23 +602,24 @@ static void on_rdbtn_freqscl_toggled (GtkToggleButton *togglebutton, gpointer us
 
 static void on_btn_snapmainwin_clicked (GtkButton *button, gpointer user_data) {
   gint x, y, w, h;
-  if(mainwin != NULL) {
+  if (mainwin != NULL) {
     gdk_window_get_position(mainwin->window, &x, &y);
     gdk_window_get_size(mainwin->window, &w, &h);
-    if(window)
+    if (window) {
       gdk_window_move(window->window, x, y+h);
-    if(gtk_toggle_button_get_active((GtkToggleButton *) user_data)) {
+    }
+    if (gtk_toggle_button_get_active((GtkToggleButton *) user_data)) {
       Cfg.pos_x=x;
       Cfg.pos_y=y+h;
     }
-    
   }
 }
 
 static void on_ckbtn_rcoords_toggled (GtkToggleButton *togglebutton, gpointer user_data) {
   if(gtk_toggle_button_get_active(togglebutton)) {
     gdk_window_get_position(window->window, &Cfg.pos_x, &Cfg.pos_y);
-  } else {
+  }
+  else {
     Cfg.pos_x=-1;
   }
 }
@@ -639,15 +649,15 @@ static void on_adj_dbrange_value_changed (GtkAdjustment *adjustment,
 static void on_etry_theme_changed (GtkEditable *editable, gpointer user_data) {
   g_free(Cfg.skin_xpm);
   Cfg.skin_xpm = g_strdup(gtk_entry_get_text((GtkEntry *) editable));
-  if (window) 
-    dspec_set_theme();
+  if (window) dspec_set_theme();
 }
 
 /* ************************* */
 /* fileselect callbacks     */
 static void on_btn_theme_clicked (GtkButton *button, gpointer user_data) {
-  if(fsel == NULL)
+  if (fsel == NULL) {
     create_fileselection();
+  }
   gtk_widget_show(fsel);
 }
 
@@ -757,11 +767,11 @@ static void dspec_config (void) {
   GtkObject *adj_ampscale;
   GtkObject *adj_dbrange;
 
-  if(win_conf)
-    return;
+  if (win_conf) return;
 
-  if(Cfg.skin_xpm == NULL) /* if config never read */
+  if (Cfg.skin_xpm == NULL) { /* if config never read */
     dspec_config_read ();  
+  }
 
   win_conf = gtk_window_new (GTK_WINDOW_DIALOG);
   gtk_window_set_title (GTK_WINDOW (win_conf), "Config - " THIS_IS);
@@ -808,12 +818,15 @@ static void dspec_config (void) {
   gtk_widget_show (frm_avgconf);
   gtk_box_pack_start (GTK_BOX (vb_avg), frm_avgconf, FALSE, FALSE, 0);
 
-  if( Cfg.avg_mode == 2 )
+  if ( Cfg.avg_mode == 2 ) {
     gtk_toggle_button_set_active((GtkToggleButton *) rdbtn_exp, TRUE);
-  else if(Cfg.avg_mode == 1)
+  }
+  else if(Cfg.avg_mode == 1) {
     gtk_toggle_button_set_active((GtkToggleButton *) rdbtn_step, TRUE);
-  else
+  }
+  else {
     gtk_toggle_button_set_active((GtkToggleButton *) rdbtn_non, TRUE);
+  }
 
   hbox = gtk_hbox_new (FALSE, 0);
   gtk_widget_show (hbox);
@@ -1046,7 +1059,7 @@ void create_fileselection (void) {
 		      NULL);
 }
 
-GtkWidget *item_follow;
+/*GtkWidget *item_follow;*/
 
 void on_item_close_activate(GtkMenuItem *menuitem, gpointer data)
 {
@@ -1062,15 +1075,15 @@ void on_item_conf_activate(GtkMenuItem *menuitem, gpointer data)
 {
   dspec_config();
 }
-
+/*
 void on_item_follow_activate(GtkCheckMenuItem *item, gpointer data)
 {
-  if(!g_list_find(dock_window_list, window)) {
+  if (!g_list_find(dock_window_list, window)) {
     dock_add_window(dock_window_list, window);
     gtk_widget_hide(item_follow);
   }
 }
-
+*/
 
 GtkWidget* dspec_create_menu(void)
 {
@@ -1093,11 +1106,11 @@ GtkWidget* dspec_create_menu(void)
   gtk_widget_show(sep);
   gtk_container_add (GTK_CONTAINER(menu), sep);
   gtk_widget_set_sensitive(sep, FALSE);
-
+/*
   item_follow = gtk_menu_item_new_with_label("Add to XMMS window dock list");
   gtk_widget_show(item_follow);
   gtk_container_add(GTK_CONTAINER(menu), item_follow);
-
+*/
   item_conf = gtk_menu_item_new_with_label("Config");
   gtk_widget_show(item_conf);
   gtk_container_add (GTK_CONTAINER(menu), item_conf);
@@ -1115,8 +1128,9 @@ GtkWidget* dspec_create_menu(void)
   gtk_signal_connect(GTK_OBJECT(item_conf), "activate",
 		     GTK_SIGNAL_FUNC(on_item_conf_activate), NULL);
 
+/*
   gtk_signal_connect(GTK_OBJECT(item_follow), "activate",
 		     GTK_SIGNAL_FUNC(on_item_follow_activate), NULL);
-
+*/
   return menu;
 }
