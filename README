@@ -1,0 +1,56 @@
+Dual Spectralizer - Dual Spectral Analyzer plugin for XMMS
+by Joakim Elofsson 2000
+
+REQUIERMENTS:
+	working XMMS 1.2.x <http://www.xmms.org>
+	(X, gtk+, pthreads... etc)
+
+BUILD:
+	included binary was build on a linux-i686-glibc2.1.3 system
+	
+	to build, do:
+	make
+
+	if you want you may change OPT in Makefile etc.
+
+INSTALL:
+	try  make install  as root (or  su -c 'make install')
+
+	will install plugin in xmms plugindirs and themes in
+	themedir (in xmms datadir)
+	
+	(if you have no root access, it's probably possible installing this
+	in your ~/.xmms dir, if so.. you must edit XMMS_DATADIR &
+	INSTALL-DIR in Makefile, and recompile)
+
+USE:
+	activate it in XMMS Vis-plugin-config
+	messaround with plugin-config.. and enjoy
+	(nice config:
+	  use Avegaring (ex. Step up/decay and avegaring factor 0.85
+	     logaritmic ampiltude scale with 137db range
+	     gain 3db/octave		        
+	)
+ skins
+	are 277x68 sized xpm the first 275 columns is the background
+	and the last one are barcolor
+
+ included skins (made by me)
+  bg_xmms.xpm   - the one in the .so, made to look like default xmms-skin
+  bg_blue.xpm  - made to look nice with blue_led -skin
+  bg_white.xpm - made to look nice with amptech -skin (by $teven)
+  bg_gtk.xpm - made to look nice with GTK+ -skin (by James M. Cape)
+
+possibel TODOs (not planned)
+  * autoconf -stuff (Remi Cohen-Scali have made this, not integraded yet)
+  ...
+
+
+A thanks to Remi Cohen-Scali for some ideas & code.
+
+---------------------------------------------------------
+  comments, feedback etc: joakime@hem.passagen.se
+  screenshot, download etc will come up here:
+                        http://hem.passagen.se/joakime/linuxapp.html
+
+/ Joakim Elofsson (basemetal) 2000-12-09
