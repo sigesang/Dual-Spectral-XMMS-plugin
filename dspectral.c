@@ -1,5 +1,5 @@
 /*
-  Dual Spectralyzer 1.2
+  Dual Spectralyzer 1.2.1
  -----------------------
   dual spectrum analyzer plugin for XMMS
 
@@ -18,14 +18,14 @@
 #include "bg-def.xpm"
 #include "dspectral_mini.xpm"
 
-#define THIS_IS "Dual Spectralyzer 1.2"
+#define THIS_IS "Dual Spectralyzer 1.2.1"
 
 #define NUM_BANDS 128
 
 #define CONFIG_SECTION "Dual Spectralizer"
 
 /* THEMEDIR set at maketime */
-#define THEME_DEFAULT_STR "default"
+#define THEME_DEFAULT_STR ""
 #define THEME_DEFAULT_PATH THEMEDIR
 
 /*  */
@@ -39,6 +39,10 @@
 #define SIDE_BORDER 7
 #define WINWIDTH 275
 #define WINHEIGHT AHEIGHT+TOP_BORDER+BOTTOM_BORDER
+
+#define TYPE_AVG_NONE 0
+#define TYPE_AVG_STEPUPDECAY 1
+#define TYPE_AVG_EXP 2 
 
 /* used for nonlinj freq axis */
 /* exp(($i+1)/128*log(256))-1  for using the 256point data on 128points */
@@ -70,7 +74,6 @@ static GdkBitmap *mask=NULL;
 
 static GdkPixmap *bg_pixmap = NULL;
 static GdkPixmap *pixmap = NULL;
-static gboolean dspec_window_motion = FALSE;
 static GdkGC *gc = NULL;
 
 gfloat  *fdata[2];  /* current temp */
@@ -86,20 +89,23 @@ typedef struct {
   int      db_scale_factor;
   float    amp_scale;
   char    *skin_xpm;
-  gint     pos_x;
+  gint     pos_x; /* if -1 then ignore */
   gint     pos_y;
   gboolean relmain;
 } DSpecCfg;
 
-static DSpecCfg Cfg = {0.0, 0, 0, 0, 0, 0, 0.0, NULL, 0, 0, 0};
+static DSpecCfg Cfg = {0.75, TYPE_AVG_NONE, TRUE, TRUE, FALSE, 7, 3.0, NULL, -1, -1, 0};
 
-extern GList *dock_add_window(GList *window_list, GtkWidget *window);
+extern GList *dock_add_window(GList *, GtkWidget *);
+extern gboolean dock_is_moving(GtkWidget *);
+extern void dock_move_motion(GtkWidget *,GdkEventMotion *);
+extern void dock_move_press(GList *, GtkWidget *, GdkEventButton *, gboolean);
+extern void dock_move_release(GtkWidget *);
+
 static void dspec_about();
 static void dspec_config();
 static void dspec_init(void);
 static void dspec_cleanup(void);
-static void dspec_playback_start(void);
-static void dspec_playback_stop(void);
 static void dspec_render_freq(gint16 data[2][256]);
 static void dspec_config_read();
 static GtkWidget* dspec_create_menu(void);
@@ -115,8 +121,8 @@ VisPlugin dspec_vp = {
 	dspec_about,
 	dspec_config,
 	NULL,
-	dspec_playback_start,
-	dspec_playback_stop,
+	NULL,
+	NULL,
 	NULL, 
 	dspec_render_freq /* render_freq */
 };
@@ -133,10 +139,12 @@ static void dspec_set_theme() {
   GdkColor color;
   GdkGC *gc2 = NULL;
 
-  if((Cfg.skin_xpm != NULL) && (strcmp(Cfg.skin_xpm, THEME_DEFAULT_STR) != 0))
+  if ((Cfg.skin_xpm != NULL) && (strcmp(Cfg.skin_xpm, THEME_DEFAULT_STR) != 0)) {
     bg_pixmap = gdk_pixmap_create_from_xpm(window->window, &mask, NULL, Cfg.skin_xpm);
-  if(bg_pixmap == NULL)
+  }
+  if (bg_pixmap == NULL) {
     bg_pixmap = gdk_pixmap_create_from_xpm_d(window->window, &mask, NULL, bg_def_xpm);  
+  }
   gdk_window_clear(window->window);
 
   gc2 = gdk_gc_new(mask); // mask-gc
@@ -157,20 +165,16 @@ static void dspec_set_theme() {
 
 }
 
-gint dspec_move_x;
-gint dspec_move_y;
-
 static gint dspec_mousebtnrel_cb(GtkWidget *widget, GdkEventButton *event, gpointer data)
 {
   if (event->type == GDK_BUTTON_RELEASE) {
+    if (dock_is_moving(window)) {
+      dock_move_release(window);
+    }
     if (event->button == 1) {
       if ((event->x > (WINWIDTH - TOP_BORDER)) &&
 	  (event->y < TOP_BORDER)) { //topright corner
 	dspec_vp.disable_plugin(&dspec_vp);
-      }
-      if (dspec_window_motion) {
-	gdk_pointer_ungrab(GDK_CURRENT_TIME);
-	dspec_window_motion = FALSE;
       }
     }
   }
@@ -180,30 +184,20 @@ static gint dspec_mousebtnrel_cb(GtkWidget *widget, GdkEventButton *event, gpoin
 
 static gint dspec_mousemove_cb(GtkWidget *widget, GdkEventMotion *event, gpointer data)
 {
-  if(dspec_window_motion) {
-    GdkModifierType modmask;
-    gint mouse_x, mouse_y;
-
-    gdk_window_get_pointer(NULL, &mouse_x, &mouse_y, &modmask);
-    gdk_window_move(window->window,  mouse_x - dspec_move_x, mouse_y - dspec_move_y);
+  if (dock_is_moving(window)) {
+    dock_move_motion(window, event);
   }
+
   return TRUE;
 }
 
 static gint dspec_mousebtn_cb(GtkWidget *widget, GdkEventButton *event, gpointer data)
 {
-
-  dspec_move_x = event->x;
-  dspec_move_y = event->y;
-
   if (event->type == GDK_BUTTON_PRESS) {
     if ((event->button == 1) &&
 	(event->x < (WINWIDTH - TOP_BORDER)) &&
 	(event->y <= TOP_BORDER)) { //topright corner
-      gdk_window_raise(window->window);
-      gdk_pointer_grab(window->window, FALSE, GDK_BUTTON_MOTION_MASK | GDK_BUTTON_RELEASE_MASK,
-		       GDK_NONE, GDK_NONE, GDK_CURRENT_TIME);
-      dspec_window_motion = TRUE;
+      dock_move_press(dock_window_list, window, event, FALSE);
     }
     
     if (event->button == 3) {
@@ -263,6 +257,7 @@ static void dspec_init (void) {
   gtk_widget_realize(window);
   dspec_set_icon(window);
   gdk_window_set_decorations(window->window, 0);
+  gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_NONE);
 
   if (Cfg.pos_x != -1) {
     gtk_widget_set_uposition (window, Cfg.pos_x, Cfg.pos_y);
@@ -298,30 +293,16 @@ static void dspec_init (void) {
 
   dspec_set_theme();
 
+  gtk_widget_show(window);
+
   if (!g_list_find(dock_window_list, window)) {
     dock_add_window(dock_window_list, window);
-    /*gtk_widget_hide(item_follow);*/
   }
-
-  gdk_window_clear(window->window);
-  gtk_widget_show(window);
 }
 
 static void dspec_config_read () {
   ConfigFile *cfg;
-  gchar *filename, *themefile;
-
-  /* defaults */
-  Cfg.avg_factor = 0.85;
-  Cfg.avg_mode = 0;
-  Cfg.amp_gain = TRUE;
-  Cfg.amp_db = TRUE;
-  Cfg.freq_nonlinj = FALSE;
-  Cfg.db_scale_factor = 7;
-  Cfg.amp_scale = 3.0;
-  Cfg.pos_x = -1;
-  Cfg.pos_y = -1;
-  Cfg.skin_xpm = "";
+  gchar *filename, *themefile = NULL;
 
   filename = g_strconcat(g_get_home_dir(), "/.xmms/config", NULL);
   if ((cfg = xmms_cfg_open_file(filename)) != NULL) {
@@ -373,52 +354,25 @@ static void dspec_config_write () {
 }
 
 static void dspec_cleanup(void) {
-  GList *node;
-
   dspec_config_write();
 
-  if((node = g_list_find(dock_window_list, window))) {
-    g_list_remove_link(dock_window_list, node);
+  if (g_list_find(dock_window_list, window)) {
+    g_list_remove(dock_window_list, window);
   }
+
   if (win_about) gtk_widget_destroy(win_about);
   if (win_conf)  gtk_widget_destroy(win_conf);
   if (window)    gtk_widget_destroy(window);
   if (fsel)      gtk_widget_destroy(fsel);
   if (gc)           { gdk_gc_unref(gc); gc = NULL; }
   if (bg_pixmap)    { gdk_pixmap_unref(bg_pixmap); bg_pixmap = NULL; }
-  if (pixmap) { gdk_pixmap_unref(pixmap); pixmap = NULL; }
-  //  if(pixmap_cnl_l) { gdk_pixmap_unref(pixmap_cnl_l); pixmap_cnl_l = NULL; }
+  if (pixmap)    { gdk_pixmap_unref(pixmap); pixmap = NULL; }
+  
   if (fdata[0])  free(fdata[0]); 
   if (fdata[1])  free(fdata[1]);
   if (hfdata[0]) free(hfdata[0]);
   if (hfdata[1]) free(hfdata[1]);
   if (Cfg.skin_xpm) g_free(Cfg.skin_xpm);
-}
-
-static void dspec_playback_start(void) {
-/*  if(window) {
-    gdk_window_set_back_pixmap(drwarea_cnl_r->window,pixmap_cnl_r,0);
-    gdk_window_clear(drwarea_cnl_r->window);
-    gdk_window_set_back_pixmap(drwarea_cnl_l->window,pixmap_cnl_l,0);
-    gdk_window_clear(drwarea_cnl_l->window);
-  }
-*/
-}
-
-static void dspec_playback_stop(void) {
-/*
-  GdkColor color;
-
-  gdk_color_black(gdk_colormap_get_system(),&color);
-  if(GTK_WIDGET_REALIZED(drwarea_cnl_l)) {
-    gdk_window_set_background(drwarea_cnl_l->window, &color);    
-    gdk_window_clear(drwarea_cnl_l->window);
-  }
-  if(GTK_WIDGET_REALIZED(drwarea_cnl_r)) {
-    gdk_window_set_background(drwarea_cnl_r->window, &color);
-    gdk_window_clear(drwarea_cnl_r->window);
-  }
-*/
 }
 
 static void dspec_render_freq(gint16 data[2][256]) {
@@ -444,32 +398,33 @@ static void dspec_render_freq(gint16 data[2][256]) {
        linjear or nonlinjear */
     if (Cfg.freq_nonlinj) {
       /* nonlinjear*/
-      a=xscl[i]; b=1; yr=0.0; yl=0.0;
+      a = xscl[i]; b=1; yr=0.0; yl=0.0;
       do {
-	yl+=(float) *(data_l+a) / 32678.0;
-	yr+=(float) *(data_r+a) / 32678.0;
+	yl += (float) *(data_l+a) / 32678.0;
+	yr += (float) *(data_r+a) / 32678.0;
 	a++; b++;
-      } while(a<xscl[i+1]);
+      } while( a<xscl[i+1] );
       if (b>1) { yr/=b; yl/=b; }
     }
     else {
       /* linjear */
-      yl=(float)( *(data_r+2*i) + *(data_r+2*i+1)) / 65536.0;
-      yr=(float)( *(data_l+2*i) + *(data_l+2*i+1)) / 65536.0;
-      a=i;
+      yl = (float)( *(data_r+2*i) + *(data_r+2*i+1)) / 65536.0;
+      yr = (float)( *(data_l+2*i) + *(data_l+2*i+1)) / 65536.0;
+      a = i;
     }
     
     /* calc time avegaring for data if avegaring is on */
     switch (Cfg.avg_mode) {
-    case 1:
+    case TYPE_AVG_STEPUPDECAY:
       /* step up/decay */
       *oldyr *= Cfg.avg_factor;
       *oldyl *= Cfg.avg_factor;
       if ( *oldyr > yr ) yr= *oldyr;      
       if ( *oldyl > yl ) yl= *oldyl;
-      *oldyl=yl-0.000125; *oldyr=yr-0.000125;
+      *oldyl = yl-0.000125;
+      *oldyr = yr-0.000125;
       break;
-    case 2:
+    case TYPE_AVG_EXP:
       /* exponential */
       yr = yr * (1-Cfg.avg_factor) + *oldyr * Cfg.avg_factor;
       yl = yl * (1-Cfg.avg_factor) + *oldyl * Cfg.avg_factor;
@@ -493,15 +448,7 @@ static void dspec_render_freq(gint16 data[2][256]) {
   }
 
   GDK_THREADS_ENTER();
-  /* cleanup grafs */
-/*
-  gdk_draw_rectangle(pixmap, gc, TRUE,
-		     SIDE_BORDER, TOP_BORDER,
-		     AWIDTH, AHEIGHT);
-  gdk_draw_rectangle(pixmap, gc, TRUE,
-		     WINWIDTH - SIDE_BORDER - AWIDTH, TOP_BORDER,
-		     AWIDTH, AHEIGHT);
-*/
+
   gdk_draw_pixmap(pixmap, gc, bg_pixmap,
 		     SIDE_BORDER, TOP_BORDER,
 		     SIDE_BORDER, TOP_BORDER,
@@ -564,12 +511,7 @@ static void on_btn_about_close_clicked (GtkButton *button, gpointer user_data) {
 /* ************************* */
 /* configwindow callbacks    */
 static void on_rdbtn_avgtype_toggled(GtkToggleButton *togglebutton, gpointer user_data) {
-  if(gtk_toggle_button_get_active((GtkToggleButton *) rdbtn_exp))
-    Cfg.avg_mode = 2;
-  else if(gtk_toggle_button_get_active((GtkToggleButton *) rdbtn_step))
-    Cfg.avg_mode = 1;
-  else // non
-    Cfg.avg_mode = 0;
+  Cfg.avg_mode = (int)user_data;
 }
 
 static void on_etry_avgfactor_changed(GtkEditable *editable, gpointer user_data) {
@@ -597,7 +539,7 @@ static void on_ckbtn_gain_toggled (GtkToggleButton *togglebutton, gpointer user_
 }
 
 static void on_rdbtn_freqscl_toggled (GtkToggleButton *togglebutton, gpointer user_data) {
-  Cfg.freq_nonlinj=gtk_toggle_button_get_active((GtkToggleButton *) user_data);
+  Cfg.freq_nonlinj=(int) user_data;
 }
 
 static void on_btn_snapmainwin_clicked (GtkButton *button, gpointer user_data) {
@@ -709,8 +651,8 @@ static void dspec_about(void) {
 
   lbl_author = gtk_label_new ("plugin for XMMS\n"
 			      "made by Joakim Elofsson\n"
-			      "joakime@hem.passagen.se\n"
-			      "   http://hem.passagen.se/joakime/index.html   ");
+			      "joakim.elofsson@home.se\n"
+			      "   http://www.shell.linux.se/bm/   ");
   gtk_container_add (GTK_CONTAINER (frm), lbl_author);
   gtk_widget_show (lbl_author);
 
@@ -818,10 +760,10 @@ static void dspec_config (void) {
   gtk_widget_show (frm_avgconf);
   gtk_box_pack_start (GTK_BOX (vb_avg), frm_avgconf, FALSE, FALSE, 0);
 
-  if ( Cfg.avg_mode == 2 ) {
+  if ( Cfg.avg_mode == TYPE_AVG_EXP ) {
     gtk_toggle_button_set_active((GtkToggleButton *) rdbtn_exp, TRUE);
   }
-  else if(Cfg.avg_mode == 1) {
+  else if (Cfg.avg_mode == TYPE_AVG_STEPUPDECAY) {
     gtk_toggle_button_set_active((GtkToggleButton *) rdbtn_step, TRUE);
   }
   else {
@@ -958,7 +900,8 @@ static void dspec_config (void) {
   gtk_widget_show (etry_theme);
   gtk_box_pack_start (GTK_BOX (hb_theme), etry_theme, TRUE, TRUE, 0);
   gtk_entry_set_editable (GTK_ENTRY (etry_theme), TRUE);
-  gtk_entry_set_text((GtkEntry *) etry_theme, Cfg.skin_xpm);
+  gtk_entry_set_text((GtkEntry *) etry_theme,
+		     Cfg.skin_xpm ? Cfg.skin_xpm : THEME_DEFAULT_STR);
 
   btn_theme = gtk_button_new_with_label ("Choose Theme");
   gtk_widget_show (btn_theme);
@@ -973,29 +916,26 @@ static void dspec_config (void) {
   gtk_box_pack_start (GTK_BOX (vb_main), btn_close, FALSE, FALSE, 0);
 
   gtk_signal_connect (GTK_OBJECT (ckbtn_rcoords), "toggled",
-                      GTK_SIGNAL_FUNC (on_ckbtn_rcoords_toggled),
-                      NULL);
+                      GTK_SIGNAL_FUNC (on_ckbtn_rcoords_toggled), NULL);
   gtk_signal_connect (GTK_OBJECT (rdbtn_non), "toggled",
                       GTK_SIGNAL_FUNC (on_rdbtn_avgtype_toggled),
-                      NULL);
+                      (gpointer) TYPE_AVG_NONE);
   gtk_signal_connect (GTK_OBJECT (rdbtn_step), "toggled",
                       GTK_SIGNAL_FUNC (on_rdbtn_avgtype_toggled),
-                      NULL);
+                      (gpointer) TYPE_AVG_STEPUPDECAY);
   gtk_signal_connect (GTK_OBJECT (rdbtn_exp), "toggled",
                       GTK_SIGNAL_FUNC (on_rdbtn_avgtype_toggled),
-                      NULL);
+                      (gpointer) TYPE_AVG_EXP);
   gtk_signal_connect (GTK_OBJECT (etry_avgfactor), "changed",
-                      GTK_SIGNAL_FUNC (on_etry_avgfactor_changed),
-                      NULL);
+                      GTK_SIGNAL_FUNC (on_etry_avgfactor_changed), NULL);
   gtk_signal_connect (GTK_OBJECT (rdbtn_linj), "toggled",
                       GTK_SIGNAL_FUNC (on_rdbtn_freqscl_toggled),
-                      (gpointer) rdbtn_nonlinj);
+                      (gpointer) FALSE);
   gtk_signal_connect (GTK_OBJECT (rdbtn_nonlinj), "toggled",
                       GTK_SIGNAL_FUNC (on_rdbtn_freqscl_toggled),
-                      (gpointer) rdbtn_nonlinj);
+                      (gpointer) TRUE);
   gtk_signal_connect (GTK_OBJECT (ckbtn_db), "toggled",
-                      GTK_SIGNAL_FUNC (on_ckbtn_db_toggled),
-                      NULL);
+                      GTK_SIGNAL_FUNC (on_ckbtn_db_toggled), NULL);
   gtk_signal_connect (GTK_OBJECT (btn_snapmainwin), "clicked",
                       GTK_SIGNAL_FUNC (on_btn_snapmainwin_clicked),
                       (gpointer) ckbtn_rcoords);
@@ -1075,15 +1015,6 @@ void on_item_conf_activate(GtkMenuItem *menuitem, gpointer data)
 {
   dspec_config();
 }
-/*
-void on_item_follow_activate(GtkCheckMenuItem *item, gpointer data)
-{
-  if (!g_list_find(dock_window_list, window)) {
-    dock_add_window(dock_window_list, window);
-    gtk_widget_hide(item_follow);
-  }
-}
-*/
 
 GtkWidget* dspec_create_menu(void)
 {
