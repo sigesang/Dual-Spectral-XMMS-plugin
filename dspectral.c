@@ -1,5 +1,5 @@
 /*
-  Dual Spectralyzer 1.2.1
+  Dual Spectralyzer 1.2.2
  -----------------------
   dual spectrum analyzer plugin for XMMS
 
@@ -18,7 +18,7 @@
 #include "bg-def.xpm"
 #include "dspectral_mini.xpm"
 
-#define THIS_IS "Dual Spectralyzer 1.2.1"
+#define THIS_IS "Dual Spectralyzer 1.2.2"
 
 #define NUM_BANDS 128
 
@@ -408,8 +408,8 @@ static void dspec_render_freq(gint16 data[2][256]) {
     }
     else {
       /* linjear */
-      yl = (float)( *(data_r+2*i) + *(data_r+2*i+1)) / 65536.0;
-      yr = (float)( *(data_l+2*i) + *(data_l+2*i+1)) / 65536.0;
+      yl = (float)( *(data_l+2*i) + *(data_l+2*i+1)) / 65536.0;
+      yr = (float)( *(data_r+2*i) + *(data_r+2*i+1)) / 65536.0;
       a = i;
     }
     
