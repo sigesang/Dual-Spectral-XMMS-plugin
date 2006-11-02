@@ -1,3 +1,6 @@
+1.2.1 -> 1.2.2
+fixed left/right missmatch 
+
 1.2 -> 1.2.1
 added xmms-docklist handling (requires xmms 1.2.5+)
 crash if empty config
