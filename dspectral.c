@@ -12,10 +12,11 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <xmms/plugin.h>
 #include <xmms/configfile.h>
 
-#include "bg-def.xpm"
+#include "bg_def.xpm"
 #include "dspectral_mini.xpm"
 
 #define THIS_IS "Dual Spectralyzer 1.2.2"

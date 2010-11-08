@@ -1,9 +1,7 @@
 # Change paths & OPT if necessary
 
 CC = gcc
-OPT = -m486 -O2
-#OPT = -mpentium -O6
-#OPT = -mcpu=k6 -march=k6 -O6
+OPT = -O2
 CFLAGS = $(OPT) -Wall -fPIC `gtk-config --cflags gthread`
 LFLAGS = -shared -fPIC -L/usr/local/lib
 NAME = dspectral
